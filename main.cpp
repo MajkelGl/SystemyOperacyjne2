@@ -1,34 +1,62 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include <atomic>
 #include <chrono>
+#include <cstdio>
 
 using namespace std;
 
 const int MAX_PHILOSOPHERS = 10;
-atomic<bool> flag[MAX_PHILOSOPHERS];
-atomic<int> turn;
 int num_philosophers;
 
-void philosopher(int id) {
-    for (int i = 0; i < 5; ++i) { // Each philosopher is trying to each 5 times
-        // Entrance to critical section
-        flag[id] = true;
-        turn = id;
-        for (int j = 0; j < num_philosophers; ++j) {
-            if (j != id) {
-                while (flag[j] && turn == id);
-            }
-        }
+int state[MAX_PHILOSOPHERS]; // 0 - thinking, 1 - waiting, 2 - eating
+bool forks[MAX_PHILOSOPHERS];
 
-        // Critical section - eating
-        cout << "Philosopher " << id << " is eating.\n";
+/**
+ * @brief Prints philosopher status in a readable format.
+ */
+void print_status(int id, const char* status) {
+    printf("[Philosopher %d] %s\n", id, status);
+    fflush(stdout);
+}
+
+/**
+ * @brief Checks if philosopher can start eating.
+ */
+void try_to_eat(int id) {
+    int left = id;
+    int right = (id + 1) % num_philosophers;
+
+    if (state[id] == 1 && !forks[left] && !forks[right]) {
+        forks[left] = true;
+        forks[right] = true;
+        state[id] = 2;
+        print_status(id, "is eating.");
         this_thread::sleep_for(chrono::milliseconds(500));
 
-        // Exit from critical section
-        flag[id] = false;
-        cout << "Philosopher " << id << " finished eating and is thinking.\n";
+        // Release forks after eating
+        forks[left] = false;
+        forks[right] = false;
+        state[id] = 0;
+        print_status(id, "finished eating and is thinking.");
+    }
+}
+
+/**
+ * @brief Philosopher behavior with proper fork checking.
+ */
+void philosopher(int id) {
+    for (int i = 0; i < 5; ++i) { // Each philosopher eats 5 times
+        print_status(id, "is thinking.");
+        this_thread::sleep_for(chrono::milliseconds(500));
+
+        state[id] = 1; // Mark as waiting for forks
+
+        // Keep trying to eat until successful
+        while (state[id] == 1) {
+            try_to_eat(id);
+            this_thread::sleep_for(chrono::milliseconds(10)); // Small delay to prevent CPU overload
+        }
     }
 }
 
@@ -44,11 +72,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    vector<thread> philosophers;
+    // Initialize state and forks
     for (int i = 0; i < num_philosophers; ++i) {
-        flag[i] = false;
+        state[i] = 0;
+        forks[i] = false;
     }
 
+    vector<thread> philosophers;
     for (int i = 0; i < num_philosophers; ++i) {
         philosophers.emplace_back(philosopher, i);
     }
