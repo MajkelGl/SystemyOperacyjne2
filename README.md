@@ -6,6 +6,7 @@ Problem Description
 
 The Dining Philosophers problem is a classic synchronization problem in computer science. It involves multiple philosophers who alternate between thinking and eating while sharing limited resources (forks). The challenge is to design a system where philosophers can eat without leading to deadlock or starvation.
 
+
 How to Run the Project
 
 Compilation
@@ -14,6 +15,7 @@ This program is written in C++ and uses std::thread for multithreading.
 
 # Compile the program
 g++ -std=c++20 -o main main.cpp -lpthread
+
 
 Execution
 
@@ -25,11 +27,13 @@ For example, to run with 5 philosophers:
 
 dining_philosophers 5
 
+
 Threads Used
 
 The program creates one thread per philosopher. Each thread represents an individual philosopher who cycles between thinking, being hungry, and eating.
 
 Philosopher Threads: Each philosopher follows an infinite loop of thinking, becoming hungry, picking up forks, eating, and putting down forks.
+
 
 Critical Sections and Solution
 
@@ -47,6 +51,7 @@ Printing to Console:
 
 Since multiple threads print status messages, a global flag (print_lock) ensures that only one thread prints at a time, preventing message interleaving.
 
+
 Synchronization Mechanism
 
 Instead of using mutex or atomic variables, a simple busy-wait flag mechanism is used:
@@ -56,6 +61,7 @@ Global access_control flag ensures that only one philosopher at a time modifies 
 Global print_lock flag ensures orderly output to stdout.
 
 Philosophers retry in a loop with a short delay (sleep_for) if they fail to acquire both forks.
+
 
 Expected Output Example
 
@@ -76,6 +82,7 @@ Expected Output Example
 [Philosopher 3] finished eating and is thinking.
 
 This output shows philosophers transitioning between states while ensuring synchronization.
+
 
 Notes
 
