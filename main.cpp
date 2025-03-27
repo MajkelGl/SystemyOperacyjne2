@@ -3,60 +3,78 @@
 #include <vector>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 
 using namespace std;
 
 const int MAX_PHILOSOPHERS = 10;
 int num_philosophers;
 
-int state[MAX_PHILOSOPHERS]; // 0 - thinking, 1 - waiting, 2 - eating
+int state[MAX_PHILOSOPHERS]; // 0 - thinking, 1 - hungry, 2 - eating
 bool forks[MAX_PHILOSOPHERS];
+bool access_control = false; // Simple lock
+bool print_lock = false; // Lock for printing
 
-/**
- * @brief Prints philosopher status in a readable format.
- */
 void print_status(int id, const char* status) {
+    while (print_lock) {} // Wait until print access is free
+    print_lock = true; // Lock print access
     printf("[Philosopher %d] %s\n", id, status);
     fflush(stdout);
+    print_lock = false; // Unlock print access
 }
 
-/**
- * @brief Checks if philosopher can start eating.
- */
-void try_to_eat(int id) {
+void pick_up_forks(int id) {
     int left = id;
     int right = (id + 1) % num_philosophers;
 
-    if (state[id] == 1 && !forks[left] && !forks[right]) {
-        forks[left] = true;
-        forks[right] = true;
-        state[id] = 2;
-        print_status(id, "is eating.");
-        this_thread::sleep_for(chrono::milliseconds(500));
+    state[id] = 1; // Hungry
 
-        // Release forks after eating
-        forks[left] = false;
-        forks[right] = false;
-        state[id] = 0;
-        print_status(id, "finished eating and is thinking.");
+    while (true) {
+        while (access_control) {} // Wait until global access is free
+        access_control = true; // Lock global access
+
+        if (!forks[left]) {
+            forks[left] = true;
+            if (!forks[right]) {
+                forks[right] = true;
+                state[id] = 2; // Now eating
+                access_control = false; // Unlock global access
+                print_status(id, "is eating.");
+                return;
+            } else {
+                forks[left] = false; // Release left fork if right is unavailable
+            }
+        }
+        access_control = false; // Unlock global access
+        this_thread::sleep_for(chrono::milliseconds(rand() % 50 + 10));
     }
 }
 
-/**
- * @brief Philosopher behavior with proper fork checking.
- */
+void put_down_forks(int id) {
+    int left = id;
+    int right = (id + 1) % num_philosophers;
+
+    while (access_control) {} // Wait until global access is free
+    access_control = true; // Lock global access
+
+    forks[left] = false;
+    forks[right] = false;
+    state[id] = 0;
+    access_control = false; // Unlock global access
+
+    print_status(id, "finished eating and is thinking.");
+}
+
 void philosopher(int id) {
-    for (int i = 0; i < 5; ++i) { // Each philosopher eats 5 times
+    while (true) {
         print_status(id, "is thinking.");
-        this_thread::sleep_for(chrono::milliseconds(500));
+        this_thread::sleep_for(chrono::milliseconds(rand() % 200 + 100));
 
-        state[id] = 1; // Mark as waiting for forks
+        print_status(id, "is hungry.");
+        pick_up_forks(id);
 
-        // Keep trying to eat until successful
-        while (state[id] == 1) {
-            try_to_eat(id);
-            this_thread::sleep_for(chrono::milliseconds(10)); // Small delay to prevent CPU overload
-        }
+        this_thread::sleep_for(chrono::milliseconds(rand() % 500 + 200)); // Eating time
+        put_down_forks(id);
     }
 }
 
@@ -72,7 +90,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Initialize state and forks
     for (int i = 0; i < num_philosophers; ++i) {
         state[i] = 0;
         forks[i] = false;
