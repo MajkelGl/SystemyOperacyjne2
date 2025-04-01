@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 
 using namespace std;
 
@@ -12,15 +13,14 @@ int num_philosophers;
 
 int state[MAX_PHILOSOPHERS]; // 0 - thinking, 1 - hungry, 2 - eating
 bool forks[MAX_PHILOSOPHERS];
-bool access_control = false; // Simple lock
-bool print_lock = false; // Lock for printing
+
+mutex fork_mutex[MAX_PHILOSOPHERS]; // Mutexy dla widełców
+mutex print_mutex; // Mutex do synchronizacji wypisywania
 
 void print_status(int id, const char* status) {
-    while (print_lock) {} // Wait until print access is free
-    print_lock = true; // Lock print access
+    lock_guard<mutex> lock(print_mutex); // Blokada mutexa na czas wypisywania
     printf("[Philosopher %d] %s\n", id, status);
     fflush(stdout);
-    print_lock = false; // Unlock print access
 }
 
 void pick_up_forks(int id) {
@@ -28,24 +28,24 @@ void pick_up_forks(int id) {
     int right = (id + 1) % num_philosophers;
 
     state[id] = 1; // Hungry
+    print_status(id, "is hungry.");
 
     while (true) {
-        while (access_control) {} // Wait until global access is free
-        access_control = true; // Lock global access
-
+        lock_guard<mutex> left_lock(fork_mutex[left]); // Zablokowanie lewego widelca
         if (!forks[left]) {
             forks[left] = true;
+
+            lock_guard<mutex> right_lock(fork_mutex[right]); // Zablokowanie prawego widelca
             if (!forks[right]) {
                 forks[right] = true;
-                state[id] = 2; // Now eating
-                access_control = false; // Unlock global access
+
+                state[id] = 2; // Eating
                 print_status(id, "is eating.");
                 return;
-            } else {
-                forks[left] = false; // Release left fork if right is unavailable
             }
+            // Jeśli prawy widelec nie jest dostępny, zwolnij lewy
+            forks[left] = false;
         }
-        access_control = false; // Unlock global access
         this_thread::sleep_for(chrono::milliseconds(rand() % 50 + 10));
     }
 }
@@ -54,13 +54,12 @@ void put_down_forks(int id) {
     int left = id;
     int right = (id + 1) % num_philosophers;
 
-    while (access_control) {} // Wait until global access is free
-    access_control = true; // Lock global access
+    lock_guard<mutex> left_lock(fork_mutex[left]);
+    lock_guard<mutex> right_lock(fork_mutex[right]);
 
     forks[left] = false;
     forks[right] = false;
     state[id] = 0;
-    access_control = false; // Unlock global access
 
     print_status(id, "finished eating and is thinking.");
 }
@@ -70,9 +69,7 @@ void philosopher(int id) {
         print_status(id, "is thinking.");
         this_thread::sleep_for(chrono::milliseconds(rand() % 200 + 100));
 
-        print_status(id, "is hungry.");
         pick_up_forks(id);
-
         this_thread::sleep_for(chrono::milliseconds(rand() % 500 + 200)); // Eating time
         put_down_forks(id);
     }
